@@ -1,9 +1,6 @@
 import { createUIMessageStreamResponse, safeValidateUIMessages } from "ai";
-import {
-  chatRequestSchema,
-  type ApiError,
-  type ChatUIMessage,
-} from "@/lib/api/contracts";
+import { chatRequestSchema, type ChatUIMessage } from "@/lib/api/contracts";
+import { apiError } from "@/lib/api/http";
 import { runTurn } from "@/lib/agent/runTurn";
 import { LlmConfigError } from "@/lib/llm/config";
 import { getProfileRepository } from "@/lib/profile/store";
@@ -58,7 +55,9 @@ export async function POST(request: Request) {
     return createUIMessageStreamResponse({ stream });
   } catch (error) {
     if (error instanceof LlmConfigError) {
-      return apiError(401, {
+      // 503, not 401: the client did nothing wrong; the server is missing
+      // configuration it needs to serve this route.
+      return apiError(503, {
         error: "llm_not_configured",
         message: error.message,
         envVar: error.envVar,
@@ -67,8 +66,4 @@ export async function POST(request: Request) {
     console.error(JSON.stringify({ level: "error", event: "chat_route_error", error: String(error) }));
     return apiError(500, { error: "internal_error", message: "Unexpected server error." });
   }
-}
-
-function apiError(status: number, body: ApiError): Response {
-  return Response.json(body, { status });
 }

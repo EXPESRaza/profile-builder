@@ -1,5 +1,6 @@
-import type { ApiError, ProfileResponse } from "@/lib/api/contracts";
+import type { ProfileResponse } from "@/lib/api/contracts";
 import { resolveConflictRequestSchema } from "@/lib/api/contracts";
+import { apiError } from "@/lib/api/http";
 import { resolveConflict } from "@/lib/profile/conflicts";
 import { getProfileRepository } from "@/lib/profile/store";
 
@@ -33,8 +34,4 @@ export async function POST(request: Request, ctx: RouteContext<"/api/profile/con
   }
   await repository.save(next);
   return Response.json({ profile: next } satisfies ProfileResponse);
-}
-
-function apiError(status: number, body: ApiError): Response {
-  return Response.json(body, { status });
 }
