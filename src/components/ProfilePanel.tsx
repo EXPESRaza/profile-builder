@@ -1,9 +1,11 @@
 import type { TravelProfile } from "@/lib/profile/schema";
+import { ConflictBanner } from "./ConflictBanner";
 
 type Props = {
   profile: TravelProfile | null;
   onReset: () => void;
   resetting: boolean;
+  onResolveConflict: (id: string, resolution: "keepExisting" | "useProposed") => Promise<void>;
 };
 
 const LABELS: Record<
@@ -25,7 +27,7 @@ const LABELS: Record<
 };
 
 /** Read-only view of the current profile. Purely presentational. */
-export function ProfilePanel({ profile, onReset, resetting }: Props) {
+export function ProfilePanel({ profile, onReset, resetting, onResolveConflict }: Props) {
   const rows = profile
     ? (Object.keys(LABELS) as Array<keyof typeof LABELS>)
         .map((key) => ({ key, label: LABELS[key], value: formatValue(profile[key]) }))
@@ -50,6 +52,8 @@ export function ProfilePanel({ profile, onReset, resetting }: Props) {
           Reset
         </button>
       </header>
+
+      {profile && <ConflictBanner conflicts={profile.pendingConflicts} onResolve={onResolveConflict} />}
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {profile && rows.length === 0 && (

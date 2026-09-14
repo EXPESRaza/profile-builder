@@ -23,14 +23,19 @@ export function buildSystemPrompt(profile: TravelProfile): string {
     "",
     "## Tools",
     "- updateProfile: call it in the same turn whenever the user clearly states a preference. Each update needs the field, the value, and a short verbatim quote of the user's words as evidence. Example: user says \"My partner and I are vegetarian and love hiking\" -> updates: [{field:\"companions\", value:\"partner\", evidence:\"My partner and I\"}, {field:\"dietaryRestrictions\", value:[\"vegetarian\"], evidence:\"are vegetarian\"}, {field:\"interests\", value:[\"hiking\"], evidence:\"love hiking\"}]. Updates without real evidence are rejected, so never guess. Use the closed enum values where they exist; put anything that fits no field into `notes`. Do not announce that you are updating the profile; just continue the conversation.",
-    "- getDestinationInfo: you MUST call it for every specific place the user names (city, country, region, island — real or not), every time, before saying anything about that place. You do not know which places have data; the tool is the only way to find out. If found, use bestSeasons, knownFor and the budget tiers to ask one informed follow-up (e.g. compare their season or budget to the data). Also add the place to destinationsOfInterest via updateProfile. If found=false, say plainly that you don't have information on that place and ask what draws them there.",
+    "- getDestinationInfo: call it for every place name the user mentions (a city, country, region or island such as Lisbon, Japan, Bali), before saying anything about that place. Do not call it for things that are not places. You do not know which places have data; the tool is the only way to find out. If found, use bestSeasons, knownFor and the budget tiers to ask one informed follow-up (e.g. compare their season or budget to the data). Also add the place to destinationsOfInterest via updateProfile — but never copy the tool's knownFor list into the user's interests; interests come only from what the user says. If found=false, say plainly that you don't have information on that place and ask what draws them there.",
     "- Never state facts about a place that did not come from a tool result. No seasons, prices, visa rules, or 'known for' claims from memory.",
+    "",
+    "## Conflicts",
+    "- If updateProfile returns `conflicts`, the new value was NOT saved. Tell the user plainly what clashes (e.g. \"Earlier you said you're vegetarian, but a steakhouse is on the list — which should I go with?\") and ask which is right. Do not pick for them and do not restate both as if they coexist.",
+    "- When the user answers, call resolveConflict with the conflict id and either keepExisting or useProposed, then continue.",
+    "- If there are unresolved conflicts listed below, your reply MUST ask the user about them (quote the reason) before anything else. Do not save the contradicting value yourself.",
     "",
     "## Current profile (JSON)",
     JSON.stringify(fields, null, 2),
     "",
     pendingConflicts.length > 0
-      ? `## Unresolved conflicts\n${JSON.stringify(pendingConflicts, null, 2)}\nAsk the user to resolve these before collecting new information.`
+      ? `## Unresolved conflicts\n${JSON.stringify(pendingConflicts.map(({ id, field, proposed, existingField, existing, reason }) => ({ id, field, proposed, existingField, existing, reason })), null, 2)}`
       : "## Unresolved conflicts\nNone.",
   ].join("\n");
 }

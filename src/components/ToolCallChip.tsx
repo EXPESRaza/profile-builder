@@ -34,11 +34,20 @@ function describe(part: ToolUIPart<ChatTools>): string | null {
     }
     case "tool-updateProfile": {
       if (part.state !== "output-available") return "Updating profile…";
-      const { applied, rejected } = part.output;
+      const { applied, rejected, conflicts } = part.output;
       const bits: string[] = [];
       if (applied.length) bits.push(`Saved ${applied.map(humanise).join(", ")}`);
+      if (conflicts.length) bits.push(`${conflicts.length} conflict${conflicts.length > 1 ? "s" : ""} held`);
       if (rejected.length) bits.push(`ignored ${rejected.length} unsupported`);
       return bits.length ? bits.join(" · ") : null;
+    }
+    case "tool-resolveConflict": {
+      if (part.state !== "output-available") return "Resolving…";
+      return part.output.ok
+        ? part.output.resolution === "useProposed"
+          ? "Updated with your new answer"
+          : "Kept the original"
+        : null;
     }
     default:
       return null;

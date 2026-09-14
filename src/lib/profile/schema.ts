@@ -69,9 +69,13 @@ export type ArrayFieldName = (typeof ARRAY_FIELDS)[number];
  */
 export const conflictSchema = z.object({
   id: z.string().min(1),
+  /** The field the new value was headed for. */
   field: profileFieldsSchema.keyof(),
-  existing: z.unknown(),
   proposed: z.unknown(),
+  /** The stored value it contradicts. Usually the same field; for
+   *  cross-field contradictions (vegetarian vs. steakhouse) it is another. */
+  existingField: profileFieldsSchema.keyof(),
+  existing: z.unknown(),
   reason: z.string().min(1),
   createdAt: z.iso.datetime(),
 });

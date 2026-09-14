@@ -62,11 +62,54 @@ export function verifyUpdates(updates: ProfileUpdate[], userText: string): Verif
       continue;
     }
 
+    // List items are free text: each one must itself be grounded in the
+    // user's words, otherwise a valid quote ("Buenos Aires") can smuggle in
+    // values lifted from a tool result ("tango", "wine").
+    if (isArrayField(update.field)) {
+      const items = parsed.data as string[];
+      const grounded = items.filter((item) => itemGrounded(item, haystack));
+      const dropped = items.filter((item) => !grounded.includes(item));
+      if (dropped.length > 0) {
+        rejected.push({
+          field: update.field,
+          reason: `${dropped.map((d) => `"${d}"`).join(", ")} not mentioned by the user`,
+        });
+      }
+      if (grounded.length === 0) continue;
+      (patch as Record<string, unknown>)[update.field] = grounded;
+      continue;
+    }
+
     (patch as Record<string, unknown>)[update.field] = parsed.data;
   }
 
   return { patch, rejected };
 }
+
+/**
+ * True if the item, or a word of it, appears in the user's text. Words are
+ * compared by a short word-start prefix so "hiking" matches "hike" and
+ * "steakhouse" matches "steak", while "tango" does not match anything in
+ * "can't wait to hit a famous steakhouse".
+ */
+function itemGrounded(item: string, haystack: string): boolean {
+  const needle = normalise(item);
+  if (!needle) return false;
+  if (haystack.includes(needle)) return true;
+  const hayPrefixes = new Set(
+    haystack
+      .split(" ")
+      .filter((w) => w.length >= 3)
+      .map((w) => w.slice(0, STEM_PREFIX)),
+  );
+  return needle
+    .split(" ")
+    .filter((w) => w.length >= 3)
+    .some((w) => hayPrefixes.has(w.slice(0, STEM_PREFIX)));
+}
+
+/** 3 lets "hike"/"hiking" and "surf"/"surfing" agree; 4 would not. */
+const STEM_PREFIX = 3;
 
 /**
  * Models sometimes wrap a scalar in an array or send a bare string for a

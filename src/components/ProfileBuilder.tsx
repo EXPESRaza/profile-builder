@@ -3,7 +3,12 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useCallback, useEffect, useState } from "react";
-import { apiErrorFromChatError, fetchProfile, resetProfile } from "@/lib/api/client";
+import {
+  apiErrorFromChatError,
+  fetchProfile,
+  resetProfile,
+  resolveProfileConflict,
+} from "@/lib/api/client";
 import type { ApiError, ChatUIMessage } from "@/lib/api/contracts";
 import type { TravelProfile } from "@/lib/profile/schema";
 import { Composer } from "./Composer";
@@ -56,6 +61,18 @@ export function ProfileBuilder() {
     }
   }, []);
 
+  const handleResolveConflict = useCallback(
+    async (id: string, resolution: "keepExisting" | "useProposed") => {
+      try {
+        const res = await resolveProfileConflict(id, resolution);
+        setProfile(res.profile);
+      } catch (err) {
+        setApiError({ error: "internal_error", message: (err as Error).message });
+      }
+    },
+    [],
+  );
+
   const busy = status === "submitted" || status === "streaming";
 
   return (
@@ -65,7 +82,12 @@ export function ProfileBuilder() {
         <MessageList messages={messages} streaming={busy} />
         <Composer onSend={handleSend} disabled={busy || apiError?.error === "llm_not_configured"} />
       </section>
-      <ProfilePanel profile={profile} onReset={handleReset} resetting={resetting} />
+      <ProfilePanel
+        profile={profile}
+        onReset={handleReset}
+        resetting={resetting}
+        onResolveConflict={handleResolveConflict}
+      />
     </div>
   );
 }

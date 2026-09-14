@@ -1,4 +1,9 @@
-import { isApiError, type ApiError, type ProfileResponse } from "./contracts";
+import {
+  isApiError,
+  type ApiError,
+  type ProfileResponse,
+  type ResolveConflictRequest,
+} from "./contracts";
 
 /**
  * Thin typed fetch helpers for the non-stream routes. The chat stream itself
@@ -12,6 +17,18 @@ export async function fetchProfile(): Promise<ProfileResponse> {
 
 export async function resetProfile(): Promise<ProfileResponse> {
   const res = await fetch("/api/profile", { method: "DELETE" });
+  return parseJson<ProfileResponse>(res);
+}
+
+export async function resolveProfileConflict(
+  id: string,
+  resolution: ResolveConflictRequest["resolution"],
+): Promise<ProfileResponse> {
+  const res = await fetch(`/api/profile/conflicts/${encodeURIComponent(id)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ resolution } satisfies ResolveConflictRequest),
+  });
   return parseJson<ProfileResponse>(res);
 }
 

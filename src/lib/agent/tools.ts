@@ -4,9 +4,15 @@ import type { ChatUIMessage } from "@/lib/api/contracts";
 import { getDestinationInfo } from "@/lib/destinations/getDestinationInfo";
 import type { DestinationInfo } from "@/lib/destinations/types";
 import { applyPatch, sanitizePatch } from "@/lib/profile/apply";
+import {
+  holdConflicts,
+  partitionPatch,
+  resolveConflict,
+  type Resolution,
+} from "@/lib/profile/conflicts";
 import { profileUpdateSchema, verifyUpdates, type RejectedUpdate } from "@/lib/profile/evidence";
 import type { ProfileRepository } from "@/lib/profile/repository";
-import type { ProfileFieldName, TravelProfile } from "@/lib/profile/schema";
+import type { Conflict, ProfileFieldName, TravelProfile } from "@/lib/profile/schema";
 
 /**
  * Per-turn context the tools need. The writer lets a tool push a fresh
@@ -30,8 +36,14 @@ export type UpdateProfileOutput = {
   applied: ProfileFieldName[];
   unchanged: ProfileFieldName[];
   rejected: RejectedUpdate[];
+  /** Newly held contradictions. The model should ask the user about these. */
+  conflicts: Conflict[];
   profile: TravelProfile;
 };
+
+export type ResolveConflictOutput =
+  | { ok: true; resolution: Resolution; profile: TravelProfile }
+  | { ok: false; reason: string };
 
 export function buildTools(ctx: TurnContext) {
   return {
@@ -63,18 +75,46 @@ export function buildTools(ctx: TurnContext) {
       execute: async ({ updates }): Promise<UpdateProfileOutput> => {
         const { patch: verified, rejected } = verifyUpdates(updates, ctx.userText);
         const patch = sanitizePatch(verified);
-        const { profile, changed } = applyPatch(ctx.profile, patch);
-        const unchanged = (Object.keys(patch) as ProfileFieldName[]).filter(
+
+        // Contradictions are held, not written. Everything else merges.
+        const { safe, conflicts: candidates } = partitionPatch(ctx.profile, patch);
+        const { profile: merged, changed } = applyPatch(ctx.profile, safe);
+        const { profile, held } = holdConflicts(merged, candidates);
+        const unchanged = (Object.keys(safe) as ProfileFieldName[]).filter(
           (k) => !changed.includes(k),
         );
 
-        if (changed.length > 0) {
+        if (changed.length > 0 || held.length > 0) {
           await ctx.repository.save(profile);
           ctx.profile = profile;
           ctx.writer.write({ type: "data-profile", data: profile });
         }
 
-        return { applied: changed, unchanged, rejected, profile: ctx.profile };
+        return {
+          applied: changed,
+          unchanged,
+          rejected,
+          conflicts: held,
+          profile: ctx.profile,
+        };
+      },
+    }),
+
+    resolveConflict: tool({
+      description:
+        "Apply the user's decision on a pending conflict once they have said which value is right. keepExisting discards the new value; useProposed writes it and removes the contradicting stored value.",
+      inputSchema: z.object({
+        conflictId: z.string().min(1).describe("The id from the pending conflicts list."),
+        resolution: z.enum(["keepExisting", "useProposed"]),
+      }),
+      execute: async ({ conflictId, resolution }): Promise<ResolveConflictOutput> => {
+        const next = resolveConflict(ctx.profile, conflictId, resolution);
+        if (!next) return { ok: false, reason: `No pending conflict with id ${conflictId}.` };
+
+        await ctx.repository.save(next);
+        ctx.profile = next;
+        ctx.writer.write({ type: "data-profile", data: next });
+        return { ok: true, resolution, profile: next };
       },
     }),
   };

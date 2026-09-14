@@ -54,6 +54,30 @@ describe("verifyUpdates", () => {
     expect(patch).toEqual({ companions: "partner", interests: ["surfing"], dailyBudgetUSD: 150 });
   });
 
+  it("drops list items lifted from tool results even when the quote is real", () => {
+    const { patch, rejected } = verifyUpdates(
+      [
+        {
+          field: "interests",
+          value: ["tango", "nightlife", "steakhouse", "wine"],
+          evidence: "Buenos Aires",
+        },
+        { field: "destinationsOfInterest", value: ["Buenos Aires"], evidence: "Buenos Aires" },
+      ],
+      "We're thinking Buenos Aires - can't wait to hit a famous steakhouse there!",
+    );
+    expect(patch).toEqual({ interests: ["steakhouse"], destinationsOfInterest: ["Buenos Aires"] });
+    expect(rejected[0]?.reason).toMatch(/"tango", "nightlife", "wine" not mentioned/);
+  });
+
+  it("grounds list items by word stem so hike/hiking agree", () => {
+    const { patch } = verifyUpdates(
+      [{ field: "interests", value: ["hiking", "surfing"], evidence: "we hike and surf" }],
+      "On trips we hike and surf a lot.",
+    );
+    expect(patch.interests).toEqual(["hiking", "surfing"]);
+  });
+
   it("rejects values that do not fit the field schema", () => {
     const { patch, rejected } = verifyUpdates(
       [{ field: "pace", value: "slow", evidence: "I'm vegetarian" }],

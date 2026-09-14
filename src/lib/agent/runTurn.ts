@@ -1,6 +1,7 @@
 import { convertToModelMessages, createUIMessageStream, stepCountIs, streamText } from "ai";
 import type { ChatUIMessage } from "@/lib/api/contracts";
 import { resolveLanguageModel } from "@/lib/llm/provider";
+import { detectConflictsInText, holdConflicts } from "@/lib/profile/conflicts";
 import type { ProfileRepository } from "@/lib/profile/repository";
 import type { TravelProfile } from "@/lib/profile/schema";
 import { buildSystemPrompt } from "./systemPrompt";
@@ -38,14 +39,26 @@ export async function runTurn({ messages, profile, repository, onError }: RunTur
 
   const userText = collectUserText(messages);
 
+  // Explicit pre-model step: catch contradictions in the user's latest words
+  // against what is already stored, so surfacing them does not depend on
+  // the model choosing to call updateProfile with the offending value.
+  const latestUserText = collectUserText(messages.slice(-1));
+  const { profile: checked, held } = holdConflicts(
+    profile,
+    detectConflictsInText(profile, latestUserText),
+  );
+  if (held.length > 0) await repository.save(checked);
+
   return createUIMessageStream<ChatUIMessage>({
     onError,
     execute: ({ writer }) => {
-      const tools = buildTools({ repository, writer, profile, userText });
+      if (held.length > 0) writer.write({ type: "data-profile", data: checked });
+
+      const tools = buildTools({ repository, writer, profile: checked, userText });
 
       const result = streamText({
         model,
-        system: buildSystemPrompt(profile),
+        system: buildSystemPrompt(checked),
         messages: modelMessages,
         tools,
         stopWhen: stepCountIs(MAX_STEPS),

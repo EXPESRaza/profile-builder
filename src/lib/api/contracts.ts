@@ -32,9 +32,16 @@ export const chatRequestSchema = z.object({
 });
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
 
+/** POST /api/profile/conflicts/:id request body. */
+export const resolveConflictRequestSchema = z.object({
+  resolution: z.enum(["keepExisting", "useProposed"]),
+});
+export type ResolveConflictRequest = z.infer<typeof resolveConflictRequestSchema>;
+
 /** Non-stream error envelope, returned by any route on failure. */
 export type ApiErrorCode =
   | "invalid_request"
+  | "not_found"
   | "llm_not_configured"
   | "provider_error"
   | "internal_error";
