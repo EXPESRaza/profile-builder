@@ -1,5 +1,6 @@
-import type { UIMessage } from "ai";
+import type { InferUITools, UIMessage } from "ai";
 import { z } from "zod";
+import type { ProfileBuilderTools } from "@/lib/agent/tools";
 import type { TravelProfile } from "@/lib/profile/schema";
 
 /**
@@ -17,7 +18,12 @@ export type ChatDataParts = {
   profile: TravelProfile;
 };
 
-export type ChatUIMessage = UIMessage<never, ChatDataParts>;
+/** Tool parts are typed from the server's tool definitions, so the client
+ *  can render `tool-getDestinationInfo` / `tool-updateProfile` parts with
+ *  typed input/output and no casting. */
+export type ChatTools = InferUITools<ProfileBuilderTools>;
+
+export type ChatUIMessage = UIMessage<never, ChatDataParts, ChatTools>;
 
 /** POST /api/chat request body. Messages are validated by the AI SDK's
  *  safeValidateUIMessages on the server; this schema guards the envelope. */

@@ -1,5 +1,7 @@
+import { isToolUIPart } from "ai";
 import { useEffect, useRef } from "react";
-import type { ChatUIMessage } from "@/lib/api/contracts";
+import type { ChatTools, ChatUIMessage } from "@/lib/api/contracts";
+import { ToolCallChip } from "./ToolCallChip";
 
 type Props = {
   messages: ChatUIMessage[];
@@ -56,7 +58,9 @@ function MessageBubble({ message }: { message: ChatUIMessage }) {
               </p>
             );
           }
-          // Tool and data parts get dedicated rendering in later commits.
+          if (isToolUIPart<ChatTools>(part) && part.type !== "dynamic-tool") {
+            return <ToolCallChip key={i} part={part} />;
+          }
           return null;
         })}
       </div>

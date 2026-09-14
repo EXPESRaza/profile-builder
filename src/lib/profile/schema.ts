@@ -87,8 +87,48 @@ export type TravelProfile = z.infer<typeof travelProfileSchema>;
  * What the LLM is allowed to send via `updateProfile`: every preference field
  * optional, and array fields are *additions* (union-merged), never replacements.
  * Bookkeeping fields are intentionally not patchable.
+ *
+ * The descriptions are part of the tool schema the model sees. They exist
+ * because small models will otherwise fill every field with a guess.
  */
-export const profilePatchSchema = profileFieldsSchema.partial();
+const ONLY_IF_STATED = "Include ONLY if the user explicitly said so in the conversation. Omit otherwise.";
+
+export const profilePatchSchema = z.object({
+  homeBase: profileFieldsSchema.shape.homeBase.describe(
+    `City/region the user travels from. ${ONLY_IF_STATED}`,
+  ),
+  travelStyle: profileFieldsSchema.shape.travelStyle.describe(
+    `Overall spend level. ${ONLY_IF_STATED}`,
+  ),
+  dailyBudgetUSD: profileFieldsSchema.shape.dailyBudgetUSD.describe(
+    `Per-person daily budget in USD. ${ONLY_IF_STATED} Never estimate.`,
+  ),
+  pace: profileFieldsSchema.shape.pace.describe(`How packed their days are. ${ONLY_IF_STATED}`),
+  accommodation: profileFieldsSchema.shape.accommodation.describe(
+    `Preferred lodging type. ${ONLY_IF_STATED}`,
+  ),
+  companions: profileFieldsSchema.shape.companions.describe(
+    `Who they usually travel with. ${ONLY_IF_STATED}`,
+  ),
+  interests: profileFieldsSchema.shape.interests.unwrap().optional().describe(
+    `Activities/themes to ADD (e.g. "hiking", "food"). ${ONLY_IF_STATED}`,
+  ),
+  dietaryRestrictions: profileFieldsSchema.shape.dietaryRestrictions.unwrap().optional().describe(
+    `Diets/allergies to ADD (e.g. "vegetarian"). ${ONLY_IF_STATED}`,
+  ),
+  preferredSeasons: profileFieldsSchema.shape.preferredSeasons.unwrap().optional().describe(
+    `Seasons to ADD. ${ONLY_IF_STATED}`,
+  ),
+  destinationsOfInterest: profileFieldsSchema.shape.destinationsOfInterest.unwrap().optional().describe(
+    `Places the user said they are considering, to ADD. ${ONLY_IF_STATED}`,
+  ),
+  avoid: profileFieldsSchema.shape.avoid.unwrap().optional().describe(
+    `Dealbreakers to ADD (e.g. "crowds", "long flights"). ${ONLY_IF_STATED}`,
+  ),
+  notes: profileFieldsSchema.shape.notes.describe(
+    `Free text for anything stated that fits no other field. ${ONLY_IF_STATED}`,
+  ),
+});
 export type ProfilePatch = z.infer<typeof profilePatchSchema>;
 
 export function emptyProfile(now: Date = new Date()): TravelProfile {

@@ -1,4 +1,4 @@
-import { safeValidateUIMessages } from "ai";
+import { createUIMessageStreamResponse, safeValidateUIMessages } from "ai";
 import {
   chatRequestSchema,
   type ApiError,
@@ -40,11 +40,14 @@ export async function POST(request: Request) {
     });
   }
 
-  const profile = await getProfileRepository().load();
+  const repository = getProfileRepository();
+  const profile = await repository.load();
 
   try {
-    const result = await runTurn({ messages: validated.data, profile });
-    return result.toUIMessageStreamResponse({
+    const stream = await runTurn({
+      messages: validated.data,
+      profile,
+      repository,
       // Surface a readable message in the stream instead of the default
       // "An error occurred." Provider details are logged server-side only.
       onError: (error) => {
@@ -52,6 +55,7 @@ export async function POST(request: Request) {
         return "The assistant hit an error talking to the model. Please try again.";
       },
     });
+    return createUIMessageStreamResponse({ stream });
   } catch (error) {
     if (error instanceof LlmConfigError) {
       return apiError(401, {
