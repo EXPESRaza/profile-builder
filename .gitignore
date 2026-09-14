@@ -39,7 +39,7 @@ yarn-error.log*
 
 # local tool config / scratch
 .claude/
-dev.log
+dev*.log
 
 # vercel
 .vercel

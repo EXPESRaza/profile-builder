@@ -4,24 +4,46 @@ A single-page chat app that builds a durable **travel profile** through conversa
 
 Take-home exercise for Atlas (Full-Stack Engineer). See [`PROCESS.md`](./PROCESS.md) for the annotated build log and reflection.
 
-## Quick start
+## Run it (2 commands)
 
-Requires Node 20+ (built on Node 24) and an OpenAI API key.
+Needs Node 20+ and an OpenAI key.
 
 ```bash
-git clone <this repo> && cd vayo-profile-builder
 npm install
-cp .env.example .env.local        # then set OPENAI_API_KEY=sk-...
-npm run dev                       # http://localhost:3000
+OPENAI_API_KEY=sk-... npm run dev        # → http://localhost:3000
 ```
 
-Try: *"I'm vegetarian and I love hiking. Thinking about Lisbon in the spring."* — then *"Can't wait to hit a famous steakhouse there."*
+PowerShell: `$env:OPENAI_API_KEY="sk-..."; npm run dev`. Or put the key in `.env.local` (copy `.env.example`) and just `npm run dev`.
 
-```bash
-npm test          # 47 unit tests (conflicts, evidence, destinations, store, config)
-npm run typecheck
-npm run lint
+Try: *"I'm vegetarian and I love hiking. Thinking about Lisbon in the spring."* — then *"Can't wait to hit a famous steakhouse there."* Watch the right panel.
+
+`npm test` runs 47 unit tests; `npm run typecheck` and `npm run lint` are also wired.
+
+## 60-second tour
+
+**What it does.** You chat; the assistant interviews you. Each turn is one streamed LLM call with three tools: `getDestinationInfo` (hardcoded data for 8 places, `null` otherwise), `updateProfile` (writes fields — but only with a verbatim quote from you as evidence, verified server-side), and `resolveConflict`. Contradictions (vegetarian → steakhouse) are **held**, shown in a banner, and the assistant asks you which is right. The profile is a JSON file and survives reload.
+
+**Where things live.**
+
 ```
+src/app/api/            transport only: validate → load → delegate → serialise
+  chat/route.ts           POST, streams the turn
+  profile/route.ts        GET / DELETE
+  profile/conflicts/[id]  POST keepExisting | useProposed
+src/lib/agent/          orchestration: runTurn.ts (the loop), tools.ts, systemPrompt.ts
+src/lib/profile/        domain: schema.ts (zod, the source of truth), apply.ts (merge),
+                          evidence.ts (quote verification), conflicts.ts (all conflict logic),
+                          jsonFileRepository.ts (persistence behind a 3-method interface)
+src/lib/destinations/   getDestinationInfo + data
+src/lib/llm/            provider selection from env; every failure mode named
+src/lib/api/            the typed client↔server contract (contracts.ts) + fetch helpers
+src/components/         ProfileBuilder (only stateful piece) → chat + profile panel
+docs/api.http           runnable request collection
+```
+
+**The three decisions that matter.** (1) Extraction is evidence-backed because small models pad every field with guesses — prompting didn't fix it, verification did. (2) Conflicts are detected twice: on write, and *before the model runs* by scanning your message, because the model sometimes reasons about a contradiction in prose and never tries to write it. (3) `lib/` never imports Next or React, so the domain is testable and the provider is a one-line swap.
+
+Everything below is detail.
 
 ## Provider and configuration
 
