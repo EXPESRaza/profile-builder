@@ -40,11 +40,64 @@ npm run lint
 
 | Situation | Behaviour |
 |---|---|
-| Key missing / blank, or unknown `LLM_PROVIDER` | `POST /api/chat` returns `401 {error:"llm_not_configured", envVar:"OPENAI_API_KEY"}` **before** any stream opens. UI shows a banner naming the env var and disables the composer. Env is re-read per request, so fixing `.env.local` under `next dev` works without a restart. |
+| Key missing / blank, or unknown `LLM_PROVIDER` | `POST /api/chat` returns `503 {error:"llm_not_configured", envVar:"OPENAI_API_KEY"}` **before** any stream opens (503, not 401: the client did nothing wrong). UI shows a banner naming the env var and disables the composer. Env is re-read per request, so fixing `.env.local` under `next dev` works without a restart. |
 | Key invalid, no credits, rate limit, provider 5xx | The provider is only called once the stream is open, so this arrives as an `error` part mid-stream. The real reason is logged server-side as JSON; the client sees "The assistant hit an error talking to the model" and can retry. |
 | Malformed request body | `400 invalid_request` with zod issues. Messages are validated twice: envelope (zod) then structure (AI SDK `safeValidateUIMessages`). |
 | Corrupt `profile.json` | Falls back to an empty profile and logs a warning; never a 500. |
 | Model sends junk to a tool | Bad enum / shape → rejected with a reason returned to the model, not a crash. |
+
+## API
+
+Single user, no auth. All non-stream errors share one shape: `{ error: ApiErrorCode, message, envVar?, issues? }` (see `src/lib/api/contracts.ts`). A ready-to-run request collection is in [`docs/api.http`](./docs/api.http) (VS Code *REST Client* / JetBrains HTTP client).
+
+| Method & path | Purpose | Success | Errors |
+|---|---|---|---|
+| `POST /api/chat` | One conversational turn. Streams the reply. | `200` SSE — AI SDK UI-message stream (`text-delta`, `tool-*`, custom `data-profile` parts) | `400 invalid_request`, `503 llm_not_configured`, `500 internal_error`; provider failures mid-stream arrive as an `error` part |
+| `GET /api/profile` | Current profile | `200 { profile }` | — |
+| `DELETE /api/profile` | Reset to empty | `200 { profile }` | — |
+| `POST /api/profile/conflicts/:id` | Resolve a held conflict | `200 { profile }` | `400 invalid_request`, `404 not_found` |
+
+**Chat turn** (messages are AI SDK `UIMessage`s; send the whole history each turn):
+
+```bash
+curl -N -X POST http://localhost:3000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"id":"u1","role":"user","parts":[{"type":"text","text":"I am vegetarian and love hiking. Thinking about Lisbon in spring."}]}]}'
+```
+```
+data: {"type":"start"}
+data: {"type":"tool-input-available","toolName":"updateProfile","input":{"updates":[{"field":"dietaryRestrictions","value":["vegetarian"],"evidence":"I am vegetarian"}, ...]}}
+data: {"type":"data-profile","data":{"interests":["hiking"],"dietaryRestrictions":["vegetarian"], ...}}
+data: {"type":"text-delta","id":"0","delta":"Lisbon"}
+...
+data: {"type":"finish","finishReason":"stop"}
+```
+
+**Profile:**
+
+```bash
+curl http://localhost:3000/api/profile
+# {"profile":{"interests":["hiking"],"dietaryRestrictions":["vegetarian"],"preferredSeasons":["spring"],
+#   "destinationsOfInterest":["Lisbon"],"avoid":[],"pendingConflicts":[],"updatedAt":"2026-09-14T02:51:03.118Z"}}
+
+curl -X DELETE http://localhost:3000/api/profile
+```
+
+**Resolve a conflict** (ids come from `profile.pendingConflicts[].id`):
+
+```bash
+curl -X POST http://localhost:3000/api/profile/conflicts/<id> \
+  -H "Content-Type: application/json" \
+  -d '{"resolution":"keepExisting"}'      # or "useProposed"
+```
+
+**Error example** (no key set):
+
+```bash
+curl -i -X POST http://localhost:3000/api/chat -H "Content-Type: application/json" -d '{"messages":[]}'
+# HTTP/1.1 400  {"error":"invalid_request","message":"Invalid request body.","issues":[...]}
+# HTTP/1.1 503  {"error":"llm_not_configured","message":"OPENAI_API_KEY is not set. ...","envVar":"OPENAI_API_KEY"}
+```
 
 ## How it works
 
@@ -80,6 +133,10 @@ Browser ── useChat ──▶ POST /api/chat ──▶ runTurn() ──▶ st
 - **Vercel AI SDK over hand-rolled adapters.** Provider swap is one switch case; streaming/tool protocol is battle-tested. I read the installed `.d.ts` rather than coding from memory (v7 changed `convertToModelMessages` to async, and the default `openai()` factory targets the Responses API — OpenRouter needs `.chat()`).
 - **JSON file over SQLite.** Zero setup, keeps the 5-minute clone-to-run promise; the repository interface makes it a non-decision to change later.
 - **Hold-and-ask over overwrite-and-flag.** The brief warns against silent overwrites; holding respects the user and keeps the profile consistent.
+
+## Deliberately not built
+
+Per the brief and the 2-hour budget: auth or multi-user, real travel data, bookings/sharing/search history, mobile polish, broad test coverage. Also cut by choice: chat-history persistence, structured logging (next on the list), retries/rate limiting, fuzzy destination matching.
 
 ## Known gaps
 

@@ -1,0 +1,83 @@
+# Profile Builder API — request collection
+# Works with the VS Code "REST Client" extension and the JetBrains HTTP client.
+# Run `npm run dev` first. Click "Send Request" above each block.
+
+@base = http://localhost:3000
+
+### 1. Current profile (empty on a fresh clone)
+GET {{base}}/api/profile
+
+### 2. Chat turn — streams SSE; the profile updates mid-stream via data-profile parts
+POST {{base}}/api/chat
+Content-Type: application/json
+
+{
+  "messages": [
+    {
+      "id": "u1",
+      "role": "user",
+      "parts": [{ "type": "text", "text": "I'm vegetarian and I love hiking. Thinking about Lisbon in the spring." }]
+    }
+  ]
+}
+
+### 3. Profile after the turn
+GET {{base}}/api/profile
+
+### 4. Second turn that triggers a conflict (send the full history; assistant turn abbreviated)
+POST {{base}}/api/chat
+Content-Type: application/json
+
+{
+  "messages": [
+    {
+      "id": "u1",
+      "role": "user",
+      "parts": [{ "type": "text", "text": "I'm vegetarian and I love hiking. Thinking about Lisbon in the spring." }]
+    },
+    {
+      "id": "a1",
+      "role": "assistant",
+      "parts": [{ "type": "text", "text": "Noted. What kind of pace do you like?" }]
+    },
+    {
+      "id": "u2",
+      "role": "user",
+      "parts": [{ "type": "text", "text": "Relaxed. And I can't wait to hit a famous steakhouse there!" }]
+    }
+  ]
+}
+
+### 5. See the held conflict (copy an id from pendingConflicts for step 6)
+GET {{base}}/api/profile
+
+### 6. Resolve it — keepExisting | useProposed
+POST {{base}}/api/profile/conflicts/PASTE_CONFLICT_ID_HERE
+Content-Type: application/json
+
+{ "resolution": "keepExisting" }
+
+### 7. Unknown destination — assistant must admit it has no data
+POST {{base}}/api/chat
+Content-Type: application/json
+
+{
+  "messages": [
+    { "id": "u1", "role": "user", "parts": [{ "type": "text", "text": "What about Atlantis?" }] }
+  ]
+}
+
+### 8. Validation error — 400 invalid_request
+POST {{base}}/api/chat
+Content-Type: application/json
+
+{}
+
+### 9. Unknown conflict id — 404 not_found
+POST {{base}}/api/profile/conflicts/does-not-exist
+Content-Type: application/json
+
+{ "resolution": "useProposed" }
+
+### 10. Reset
+DELETE {{base}}/api/profile
