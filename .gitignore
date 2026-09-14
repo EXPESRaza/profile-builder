@@ -37,8 +37,9 @@ yarn-error.log*
 # persisted single-user profile (runtime data, never committed)
 /data/
 
-# local tool config
+# local tool config / scratch
 .claude/
+dev.log
 
 # vercel
 .vercel
