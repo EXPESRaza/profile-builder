@@ -2,8 +2,6 @@
 
 A single-page chat app that builds a durable **travel profile** through conversation. The assistant interviews you, extracts structured preferences with tool calls, looks up destinations you mention, flags contradictions instead of overwriting, and persists the profile across reloads.
 
-Take-home exercise for Atlas (Full-Stack Engineer). See [`PROCESS.md`](./PROCESS.md) for the annotated build log and reflection.
-
 ## Run it (2 commands)
 
 Needs Node 20+ and an OpenAI key.
